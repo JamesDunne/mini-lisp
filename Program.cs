@@ -16,7 +16,7 @@ namespace MiniLISP
         {
             // With apologies to Philip Greenspun.
 
-            string f = @"{expand ce [a b c 1 2 3]}";
+            string f = @"{expand ce [a b c 1 2 3 14 [] [(a 'hello' 'world')] []] a-b A -adf}";
 
             var lex = new LISPLexer(new StringReader(f));
 #if false
@@ -42,7 +42,7 @@ namespace MiniLISP
             if (expr.Kind == SExprKind.Error)
             {
                 var err = (ParserError)expr;
-                return "(ERROR: {0})".F(err.Message);
+                return "ERROR({0}): {1}".F(err.StartToken.Position, err.Message);
             }
             else if (expr.Kind == SExprKind.Invocation)
             {
@@ -70,7 +70,8 @@ namespace MiniLISP
             else if (expr.Kind == SExprKind.String)
             {
                 var iexpr = (StringExpr)expr;
-                return iexpr.StartToken.Text;
+                // TODO(jsd): Proper escape sequence rendering:
+                return "'{0}'".F(iexpr.StartToken.Text);
             }
             return "???";
         }

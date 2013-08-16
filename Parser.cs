@@ -154,7 +154,27 @@ namespace MiniLISP
                 {
                     int spos = lpos;
                     var sb = new StringBuilder(10);
-                    // TODO!!
+
+                    do
+                    {
+                        c = Read();
+                        if (c == -1) return new LISPToken(pos, LISPTokenType.Error, "Unexpected end");
+                        else if (c == '\'') break;
+                        else if (c == '\\')
+                        {
+                            c = Read();
+                            if (c == -1) return new LISPToken(pos, LISPTokenType.Error, "Unexpected end");
+                            else if (c == '\'') sb.Append('\'');
+                            else if (c == '\\') sb.Append('\\');
+                            else if (c == 'n') sb.Append('\n');
+                            else if (c == 'r') sb.Append('\r');
+                            else if (c == 't') sb.Append('\t');
+                            else return new LISPToken(pos, LISPTokenType.Error, "Unknown backslash escape character '{0}'".F((char)c));
+                        }
+                        else sb.Append((char)c);
+                    } while (true);
+
+                    c = Read();
                     return new LISPToken(spos, LISPTokenType.String, sb.ToString());
                 }
                 else
@@ -265,6 +285,7 @@ namespace MiniLISP
         readonly LISPLexer lex;
         // Last read token:
         LISPToken tok;
+        Either<LISPToken, ParserError> next;
 
         public LISPParser(LISPLexer lex)
         {
@@ -273,50 +294,49 @@ namespace MiniLISP
             this.tok = null;
         }
 
-        Either<LISPToken, ParserError> Next()
+        void Next()
         {
             tok = lex.Next();
-            if (tok.Type == LISPTokenType.EOF) return new ParserError(tok, "Unexpected end");
-            if (tok.Type == LISPTokenType.Error) return new ParserError(tok, tok.Text);
-            return tok;
+
+            if (tok.Type == LISPTokenType.EOF) next = new ParserError(tok, "Unexpected end");
+            else if (tok.Type == LISPTokenType.Error) next = new ParserError(tok, tok.Text);
+            else next = tok;
         }
 
-        Either<LISPToken, ParserError> Expect(LISPTokenType type)
+        void Expect(LISPTokenType type)
         {
-            var result = Next();
-            if (result.IsRight) return result.Right;
+            Next();
+            if (next.IsRight) return;
 
-            Debug.Assert(result.IsLeft);
-            Debug.Assert(result.Left != null);
+            Debug.Assert(next.IsLeft);
+            Debug.Assert(next.Left != null);
 
             // Check the token type is the expected type:
-            if (result.Left.Type != type) return new ParserError(tok, "Unexpected token '{0}', expecting '{1}'".F(result.Left.Type, type));
-
-            return result.Left;
+            if (next.Left.Type != type) next = new ParserError(tok, "Unexpected token '{0}', expecting '{1}'".F(next.Left.Type, type));
         }
 
         public SExpr ParseExpr()
         {
             if (tok == null)
             {
-                var result = Next();
-                if (result.IsRight) return result.Right;
+                Next();
             }
+            if (next.IsRight) return next.Right;
 
             if (tok.Type == LISPTokenType.ParenOpen)
             {
                 var start = tok;
 
                 // Expect function name:
-                var identE = Expect(LISPTokenType.Identifier);
-                if (identE.IsRight) return identE.Right;
-                var funcName = identE.Left;
+                Expect(LISPTokenType.Identifier);
+                if (next.IsRight) return next.Right;
+                var funcName = next.Left;
 
                 // Parse parameters:
                 List<SExpr> parameters;
 
-                var result = Next();
-                if (result.IsRight) return result.Right;
+                Next();
+                if (next.IsRight) return next.Right;
                 if (tok.Type == LISPTokenType.ParenClose)
                 {
                     // No parameters:
@@ -349,8 +369,8 @@ namespace MiniLISP
                 // Parse items:
                 List<SExpr> items;
 
-                var result = Next();
-                if (result.IsRight) return result.Right;
+                Next();
+                if (next.IsRight) return next.Right;
                 if (tok.Type == LISPTokenType.BracketClose)
                 {
                     // No items:
