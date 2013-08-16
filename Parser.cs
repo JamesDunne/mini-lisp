@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace MiniLISP
 {
-    public enum LISPTokenType
+    public enum TokenType
     {
         EOF,
         // For reporting errors:
@@ -26,13 +26,13 @@ namespace MiniLISP
         Integer
     }
 
-    public class LISPToken
+    public class Token
     {
         public readonly int Position;
-        public readonly LISPTokenType Type;
+        public readonly TokenType Type;
         public readonly string Text;
 
-        public LISPToken(int pos, LISPTokenType type, string text)
+        public Token(int pos, TokenType type, string text)
         {
             Type = type;
             Position = pos;
@@ -40,13 +40,13 @@ namespace MiniLISP
         }
     }
 
-    public sealed class LISPLexer
+    public sealed class Lexer
     {
         readonly TextReader tr;
         int pos, lpos;
         int c;  // last character read
 
-        public LISPLexer(TextReader tr)
+        public Lexer(TextReader tr)
         {
             if (tr == null) throw new ArgumentNullException("tr");
             this.tr = tr;
@@ -73,7 +73,7 @@ namespace MiniLISP
             return c;
         }
 
-        public LISPToken Next()
+        public Token Next()
         {
             // Only read the first char on the first call to Next():
             if (c == -2) c = Read();
@@ -81,7 +81,7 @@ namespace MiniLISP
             do
             {
                 // EOF:
-                if (c == -1 || c == 0) return new LISPToken(pos, LISPTokenType.EOF, null);
+                if (c == -1 || c == 0) return new Token(pos, TokenType.EOF, null);
 
                 // Skip whitespace:
                 if (c == ' ' || c == '\n' || c == '\r')
@@ -95,26 +95,26 @@ namespace MiniLISP
                 // Curlies and parens are equivalent in this LISP:
                 if (c == (int)'(' || c == (int)'{')
                 {
-                    var tok = new LISPToken(lpos, LISPTokenType.ParenOpen, ((char)c).ToString());
+                    var tok = new Token(lpos, TokenType.ParenOpen, ((char)c).ToString());
                     c = Read();
                     return tok;
                 }
                 else if (c == (int)')' || c == (int)'}')
                 {
-                    var tok = new LISPToken(lpos, LISPTokenType.ParenClose, ((char)c).ToString());
+                    var tok = new Token(lpos, TokenType.ParenClose, ((char)c).ToString());
                     c = Read();
                     return tok;
                 }
                 // Square brackets denote plain lists of data, not to be eval'd:
                 else if (c == (int)'[')
                 {
-                    var tok = new LISPToken(lpos, LISPTokenType.BracketOpen, ((char)c).ToString());
+                    var tok = new Token(lpos, TokenType.BracketOpen, ((char)c).ToString());
                     c = Read();
                     return tok;
                 }
                 else if (c == (int)']')
                 {
-                    var tok = new LISPToken(lpos, LISPTokenType.BracketClose, ((char)c).ToString());
+                    var tok = new Token(lpos, TokenType.BracketClose, ((char)c).ToString());
                     c = Read();
                     return tok;
                 }
@@ -130,7 +130,7 @@ namespace MiniLISP
                         c = Read();
                         if (c == -1) break;
                     } while (Char.IsDigit((char)c));
-                    return new LISPToken(spos, LISPTokenType.Integer, sb.ToString());
+                    return new Token(spos, TokenType.Integer, sb.ToString());
                 }
                 // Identifiers:
                 else if (Char.IsLetter((char)c) || c == (int)'-')
@@ -146,7 +146,7 @@ namespace MiniLISP
                         if (c == -1) break;
                     } while (Char.IsLetterOrDigit((char)c) || c == (int)'-');
 
-                    return new LISPToken(spos, LISPTokenType.Identifier, sb.ToString());
+                    return new Token(spos, TokenType.Identifier, sb.ToString());
                 }
                 // Quoted strings:
                 // NOTE(jsd): We avoid double quotes since we will be writing this language in a C# const string literal.
@@ -158,32 +158,32 @@ namespace MiniLISP
                     do
                     {
                         c = Read();
-                        if (c == -1) return new LISPToken(pos, LISPTokenType.Error, "Unexpected end");
+                        if (c == -1) return new Token(pos, TokenType.Error, "Unexpected end");
                         else if (c == '\'') break;
                         else if (c == '\\')
                         {
                             c = Read();
-                            if (c == -1) return new LISPToken(pos, LISPTokenType.Error, "Unexpected end");
+                            if (c == -1) return new Token(pos, TokenType.Error, "Unexpected end");
                             else if (c == '\'') sb.Append('\'');
                             else if (c == '\\') sb.Append('\\');
                             else if (c == 'n') sb.Append('\n');
                             else if (c == 'r') sb.Append('\r');
                             else if (c == 't') sb.Append('\t');
-                            else return new LISPToken(pos, LISPTokenType.Error, "Unknown backslash escape character '{0}'".F((char)c));
+                            else return new Token(pos, TokenType.Error, "Unknown backslash escape character '{0}'".F((char)c));
                         }
                         else sb.Append((char)c);
                     } while (true);
 
                     c = Read();
-                    return new LISPToken(spos, LISPTokenType.String, sb.ToString());
+                    return new Token(spos, TokenType.String, sb.ToString());
                 }
                 else
                 {
-                    return new LISPToken(lpos, LISPTokenType.Error, "Unexpected character '{0}'".F((char)c));
+                    return new Token(lpos, TokenType.Error, "Unexpected character '{0}'".F((char)c));
                 }
             } while (c != -1);
 
-            return new LISPToken(pos, LISPTokenType.EOF, null);
+            return new Token(pos, TokenType.EOF, null);
         }
     }
 
@@ -202,9 +202,9 @@ namespace MiniLISP
     public abstract class SExpr
     {
         public readonly SExprKind Kind;
-        public readonly LISPToken StartToken, EndToken;
+        public readonly Token StartToken, EndToken;
 
-        protected SExpr(SExprKind kind, LISPToken start, LISPToken end)
+        protected SExpr(SExprKind kind, Token start, Token end)
         {
             Kind = kind;
             StartToken = start;
@@ -216,7 +216,7 @@ namespace MiniLISP
     {
         public readonly string Message;
 
-        public ParserError(LISPToken where, string message)
+        public ParserError(Token where, string message)
             : base(SExprKind.Error, where, where)
         {
             Message = message;
@@ -225,10 +225,10 @@ namespace MiniLISP
 
     public sealed class InvocationExpr : SExpr
     {
-        public readonly LISPToken FuncName;
+        public readonly Token FuncName;
         public readonly SExpr[] Parameters;
 
-        public InvocationExpr(LISPToken start, LISPToken end, LISPToken funcName, params SExpr[] parameters)
+        public InvocationExpr(Token start, Token end, Token funcName, params SExpr[] parameters)
             : base(SExprKind.Invocation, start, end)
         {
             FuncName = funcName;
@@ -240,7 +240,7 @@ namespace MiniLISP
     {
         public readonly SExpr[] Items;
 
-        public ListExpr(LISPToken start, LISPToken end, params SExpr[] items)
+        public ListExpr(Token start, Token end, params SExpr[] items)
             : base(SExprKind.List, start, end)
         {
             Items = items;
@@ -251,10 +251,10 @@ namespace MiniLISP
     {
         public readonly SExpr[] Items;
 
-        public IdentifierExpr(LISPToken token)
+        public IdentifierExpr(Token token)
             : base(SExprKind.Identifier, token, token)
         {
-            if (token.Type != LISPTokenType.Identifier) throw new ArgumentException("token must be of type Identifier for an IdentifierExpr");
+            if (token.Type != TokenType.Identifier) throw new ArgumentException("token must be of type Identifier for an IdentifierExpr");
         }
     }
 
@@ -262,10 +262,10 @@ namespace MiniLISP
     {
         public readonly SExpr[] Items;
 
-        public IntegerExpr(LISPToken token)
+        public IntegerExpr(Token token)
             : base(SExprKind.Integer, token, token)
         {
-            if (token.Type != LISPTokenType.Integer) throw new ArgumentException("token must be of type Integer for an IntegerExpr");
+            if (token.Type != TokenType.Integer) throw new ArgumentException("token must be of type Integer for an IntegerExpr");
         }
     }
 
@@ -273,21 +273,22 @@ namespace MiniLISP
     {
         public readonly SExpr[] Items;
 
-        public StringExpr(LISPToken token)
+        public StringExpr(Token token)
             : base(SExprKind.String, token, token)
         {
-            if (token.Type != LISPTokenType.String) throw new ArgumentException("token must be of type String for a StringExpr");
+            if (token.Type != TokenType.String) throw new ArgumentException("token must be of type String for a StringExpr");
         }
     }
 
-    public sealed class LISPParser
+    public sealed class Parser
     {
-        readonly LISPLexer lex;
+        readonly Lexer lex;
         // Last read token:
-        LISPToken tok;
-        Either<LISPToken, ParserError> next;
+        Token tok;
+        // Last parser state:
+        Either<Token, ParserError> next;
 
-        public LISPParser(LISPLexer lex)
+        public Parser(Lexer lex)
         {
             if (lex == null) throw new ArgumentNullException("lex");
             this.lex = lex;
@@ -298,12 +299,12 @@ namespace MiniLISP
         {
             tok = lex.Next();
 
-            if (tok.Type == LISPTokenType.EOF) next = new ParserError(tok, "Unexpected end");
-            else if (tok.Type == LISPTokenType.Error) next = new ParserError(tok, tok.Text);
+            if (tok.Type == TokenType.EOF) next = new ParserError(tok, "Unexpected end");
+            else if (tok.Type == TokenType.Error) next = new ParserError(tok, tok.Text);
             else next = tok;
         }
 
-        void Expect(LISPTokenType type)
+        void Expect(TokenType type)
         {
             Next();
             if (next.IsRight) return;
@@ -323,12 +324,12 @@ namespace MiniLISP
             }
             if (next.IsRight) return next.Right;
 
-            if (tok.Type == LISPTokenType.ParenOpen)
+            if (tok.Type == TokenType.ParenOpen)
             {
                 var start = tok;
 
                 // Expect function name:
-                Expect(LISPTokenType.Identifier);
+                Expect(TokenType.Identifier);
                 if (next.IsRight) return next.Right;
                 var funcName = next.Left;
 
@@ -337,7 +338,7 @@ namespace MiniLISP
 
                 Next();
                 if (next.IsRight) return next.Right;
-                if (tok.Type == LISPTokenType.ParenClose)
+                if (tok.Type == TokenType.ParenClose)
                 {
                     // No parameters:
                     parameters = new List<SExpr>(0);
@@ -354,7 +355,7 @@ namespace MiniLISP
                         if (expr.Kind == SExprKind.Error) return expr;
 
                         parameters.Add(expr);
-                    } while (tok.Type != LISPTokenType.ParenClose);
+                    } while (tok.Type != TokenType.ParenClose);
                 }
 
                 var end = tok;
@@ -362,7 +363,7 @@ namespace MiniLISP
                 Next();
                 return new InvocationExpr(start, end, funcName, parameters.ToArray());
             }
-            else if (tok.Type == LISPTokenType.BracketOpen)
+            else if (tok.Type == TokenType.BracketOpen)
             {
                 var start = tok;
 
@@ -371,7 +372,7 @@ namespace MiniLISP
 
                 Next();
                 if (next.IsRight) return next.Right;
-                if (tok.Type == LISPTokenType.BracketClose)
+                if (tok.Type == TokenType.BracketClose)
                 {
                     // No items:
                     items = new List<SExpr>(0);
@@ -388,7 +389,7 @@ namespace MiniLISP
                         if (expr.Kind == SExprKind.Error) return expr;
 
                         items.Add(expr);
-                    } while (tok.Type != LISPTokenType.BracketClose);
+                    } while (tok.Type != TokenType.BracketClose);
                 }
 
                 var end = tok;
@@ -396,19 +397,19 @@ namespace MiniLISP
                 Next();
                 return new ListExpr(start, end, items.ToArray());
             }
-            else if (tok.Type == LISPTokenType.Identifier)
+            else if (tok.Type == TokenType.Identifier)
             {
                 var expr = new IdentifierExpr(tok);
                 Next();
                 return expr;
             }
-            else if (tok.Type == LISPTokenType.Integer)
+            else if (tok.Type == TokenType.Integer)
             {
                 var expr = new IntegerExpr(tok);
                 Next();
                 return expr;
             }
-            else if (tok.Type == LISPTokenType.String)
+            else if (tok.Type == TokenType.String)
             {
                 var expr = new StringExpr(tok);
                 Next();
