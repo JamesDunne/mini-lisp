@@ -19,14 +19,6 @@ namespace MiniLISP
             string f = @"{expand ce [a b c 1 2 3 14 [] [(a 'hello' 'world')] []] a-b A -adf}";
 
             var lex = new Lexer(new StringReader(f));
-#if false
-            LISPToken tok;
-            while ((tok = lex.Next()).Type != LISPTokenType.EOF)
-            {
-                Console.WriteLine("{0,5} {1,-13} {2}", tok.Position, tok.Type, tok.Text ?? "");
-            }
-#endif
-
             var prs = new Parser(lex);
             var expr = prs.ParseExpr();
             Console.WriteLine(Format(expr));

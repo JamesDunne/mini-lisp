@@ -59,6 +59,8 @@ namespace MiniLISP
             this.c = -2;
         }
 
+        public int LastPosition { get { return pos; } }
+
         int Read()
         {
             // Don't attempt to read anything if we last read EOF:
