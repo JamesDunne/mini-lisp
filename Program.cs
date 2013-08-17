@@ -2,6 +2,7 @@
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -16,12 +17,76 @@ namespace MiniLISP
         {
             // With apologies to Philip Greenspun.
 
-            string f = @"{expand ce [a b c 1 2 3 14 [] [(a 'hello' 'world')] []] a-b A -adf}";
+            // Create an evaluator with defined functions:
+            var ev = new Evaluator()
+            {
+                { "str", (v, e) => v.Eval(e.Parameters[0]).ToString() },
+                { "prefix", (v, e) =>
+                {
+                    if (e.Parameters.Length != 2) throw new ArgumentException("prefix requires 2 parameters");
 
-            var lex = new Lexer(new StringReader(f));
-            var prs = new Parser(lex);
-            var expr = prs.ParseExpr();
-            Console.WriteLine(Format(expr));
+                    // Evaluate parameters:
+                    var prefix = v.EvalExpecting<string>(e.Parameters[0]);
+                    var list = v.EvalExpecting<object[]>(e.Parameters[1]);
+
+                    var sb = new StringBuilder();
+                    for (int i = 0; i < list.Length; ++i)
+                    {
+                        if (list[i].GetType() != typeof(string)) throw new ArgumentException("list item {0} must evaluate to a string".F(i + 1));
+                        sb.AppendFormat("[{0}].[{1}]", prefix, (string)list[i]);
+                        if (i < list.Length - 1) sb.Append(", ");
+                    }
+                    return sb.ToString();
+                } },
+                { "rename", (v, e) =>
+                {
+                    if (e.Parameters.Length != 2) throw new ArgumentException("expand requires 2 parameters");
+
+                    // Evaluate parameters:
+                    var prefix = v.EvalExpecting<string>(e.Parameters[0]);
+                    var list = v.EvalExpecting<object[]>(e.Parameters[1]);
+
+                    var sb = new StringBuilder();
+                    for (int i = 0; i < list.Length; ++i)
+                    {
+                        if (list[i].GetType() != typeof(string)) throw new ArgumentException("list item {0} must evaluate to a string".F(i + 1));
+                        sb.AppendFormat("[{0}].[{1}] AS [{0}_{1}]", prefix, (string)list[i]);
+                        if (i < list.Length - 1) sb.Append(", ");
+                    }
+                    return sb.ToString();
+                } }
+            };
+
+            // Define our test code:
+            string f = @"[{rename ce [a b c '1' '2' '3' '14']} {prefix ce [ID a B C]}] testing";
+
+            {
+                var lex = new Lexer(new StringReader(f));
+                var prs = new Parser(lex);
+                var expr = prs.ParseExpr();
+                Console.WriteLine(Format(expr));
+                // Evaluate:
+                var result = ev.EvalExpecting<object[]>(expr);
+                // Output the result:
+                Console.WriteLine(result[0]);
+                Console.WriteLine(result[1]);
+            }
+
+            // LastPosition must be the last char position which parsed a non-whitespace char.
+            //Console.WriteLine(lex.LastPosition);
+
+            // Time it all:
+            var sw = Stopwatch.StartNew();
+            for (int j = 0; j < 500000; ++j)
+            {
+                var lex = new Lexer(new StringReader(f));
+                var prs = new Parser(lex);
+                var expr = prs.ParseExpr();
+                var result = ev.EvalExpecting<object[]>(expr);
+            }
+            sw.Stop();
+            Console.WriteLine("total {0,6}, per {1,8}", sw.ElapsedMilliseconds, sw.ElapsedMilliseconds / 500000.0);
+
         }
 
         static string Format(Token tok)

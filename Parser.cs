@@ -43,7 +43,7 @@ namespace MiniLISP
     public sealed class Lexer
     {
         readonly TextReader tr;
-        int pos, lpos;
+        int pos, lpos, wpos;
         int c;  // last character read
 
         public Lexer(TextReader tr)
@@ -54,12 +54,16 @@ namespace MiniLISP
             // Assume initial position is 0 in the TextReader:
             this.pos = 0;
             this.lpos = 0;
+            this.wpos = 0;
 
             // Signal that we need to read the first char:
             this.c = -2;
         }
 
-        public int LastPosition { get { return pos; } }
+        /// <summary>
+        /// Last position that was parsed which contained a non-whitespace char.
+        /// </summary>
+        public int LastPosition { get { return wpos; } }
 
         int Read()
         {
@@ -80,17 +84,15 @@ namespace MiniLISP
             // Only read the first char on the first call to Next():
             if (c == -2) c = Read();
 
-            do
+            while (true)
             {
                 // EOF:
                 if (c == -1 || c == 0) return new Token(pos, TokenType.EOF, null);
 
                 // Skip whitespace:
-                if (c == ' ' || c == '\n' || c == '\r')
-                {
+                wpos = lpos;
+                while (c == ' ' || c == '\n' || c == '\r')
                     c = Read();
-                    continue;
-                }
 
                 // TODO(jsd): comments!
 
@@ -183,9 +185,18 @@ namespace MiniLISP
                 {
                     return new Token(lpos, TokenType.Error, "Unexpected character '{0}'".F((char)c));
                 }
-            } while (c != -1);
+            }
+        }
+    }
 
-            return new Token(pos, TokenType.EOF, null);
+    public sealed class ParserException : Exception
+    {
+        public readonly Token Token;
+
+        public ParserException(Token tok, string message)
+            : base("MiniLISP error(pos {0}): {1}".F(tok.Position, message))
+        {
+            Token = tok;
         }
     }
 
@@ -211,6 +222,14 @@ namespace MiniLISP
             Kind = kind;
             StartToken = start;
             EndToken = end;
+        }
+
+        public void ThrowIfError()
+        {
+            if (Kind != SExprKind.Error) return;
+
+            var err = (ParserError)this;
+            throw new ParserException(StartToken, err.Message);
         }
     }
 
@@ -251,8 +270,6 @@ namespace MiniLISP
 
     public sealed class IdentifierExpr : SExpr
     {
-        public readonly SExpr[] Items;
-
         public IdentifierExpr(Token token)
             : base(SExprKind.Identifier, token, token)
         {
@@ -262,8 +279,6 @@ namespace MiniLISP
 
     public sealed class IntegerExpr : SExpr
     {
-        public readonly SExpr[] Items;
-
         public IntegerExpr(Token token)
             : base(SExprKind.Integer, token, token)
         {
@@ -273,8 +288,6 @@ namespace MiniLISP
 
     public sealed class StringExpr : SExpr
     {
-        public readonly SExpr[] Items;
-
         public StringExpr(Token token)
             : base(SExprKind.String, token, token)
         {
