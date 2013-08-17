@@ -43,10 +43,10 @@ namespace MiniLISP
     public sealed class Lexer
     {
         readonly TextReader tr;
-        int pos, lpos, wpos;
+        int pos, lpos;
         int c;  // last character read
 
-        public Lexer(TextReader tr)
+        public Lexer(TextReader tr, char readFirst = '\0')
         {
             if (tr == null) throw new ArgumentNullException("tr");
             this.tr = tr;
@@ -54,16 +54,16 @@ namespace MiniLISP
             // Assume initial position is 0 in the TextReader:
             this.pos = 0;
             this.lpos = 0;
-            this.wpos = 0;
 
             // Signal that we need to read the first char:
-            this.c = -2;
+            if (readFirst == '\0')
+                this.c = -2;
+            else
+                this.c = readFirst;
         }
 
-        /// <summary>
-        /// Last position that was parsed which contained a non-whitespace char.
-        /// </summary>
-        public int LastPosition { get { return wpos; } }
+        public int LastPosition { get { return pos; } }
+        public int LastChar { get { return c; } }
 
         int Read()
         {
@@ -84,15 +84,17 @@ namespace MiniLISP
             // Only read the first char on the first call to Next():
             if (c == -2) c = Read();
 
-            while (true)
+            do
             {
                 // EOF:
                 if (c == -1 || c == 0) return new Token(pos, TokenType.EOF, null);
 
                 // Skip whitespace:
-                wpos = lpos;
-                while (c == ' ' || c == '\n' || c == '\r')
+                if (c == ' ' || c == '\n' || c == '\r')
+                {
                     c = Read();
+                    continue;
+                }
 
                 // TODO(jsd): comments!
 
@@ -185,7 +187,9 @@ namespace MiniLISP
                 {
                     return new Token(lpos, TokenType.Error, "Unexpected character '{0}'".F((char)c));
                 }
-            }
+            } while (c != -1);
+
+            return new Token(pos, TokenType.EOF, null);
         }
     }
 
@@ -302,6 +306,7 @@ namespace MiniLISP
         Token tok;
         // Last parser state:
         Either<Token, ParserError> next;
+        bool hold = false;
 
         public Parser(Lexer lex)
         {
@@ -310,8 +315,18 @@ namespace MiniLISP
             this.tok = null;
         }
 
+        void Hold()
+        {
+            hold = true;
+        }
+
         void Next()
         {
+            if (hold)
+            {
+                hold = false;
+                return;
+            }
             tok = lex.Next();
 
             if (tok.Type == TokenType.EOF) next = new ParserError(tok, "Unexpected end");
@@ -333,10 +348,7 @@ namespace MiniLISP
 
         public SExpr ParseExpr()
         {
-            if (tok == null)
-            {
-                Next();
-            }
+            Next();
             if (next.IsRight) return next.Right;
 
             if (tok.Type == TokenType.ParenOpen)
@@ -353,6 +365,7 @@ namespace MiniLISP
 
                 Next();
                 if (next.IsRight) return next.Right;
+
                 if (tok.Type == TokenType.ParenClose)
                 {
                     // No parameters:
@@ -365,17 +378,18 @@ namespace MiniLISP
 
                     do
                     {
+                        Hold();
                         var expr = ParseExpr();
                         Debug.Assert(expr != null);
                         if (expr.Kind == SExprKind.Error) return expr;
 
                         parameters.Add(expr);
+                        Next();
                     } while (tok.Type != TokenType.ParenClose);
                 }
 
                 var end = tok;
 
-                Next();
                 return new InvocationExpr(start, end, funcName, parameters.ToArray());
             }
             else if (tok.Type == TokenType.BracketOpen)
@@ -399,35 +413,33 @@ namespace MiniLISP
 
                     do
                     {
+                        Hold();
                         var expr = ParseExpr();
                         Debug.Assert(expr != null);
                         if (expr.Kind == SExprKind.Error) return expr;
 
                         items.Add(expr);
+                        Next();
                     } while (tok.Type != TokenType.BracketClose);
                 }
 
                 var end = tok;
 
-                Next();
                 return new ListExpr(start, end, items.ToArray());
             }
             else if (tok.Type == TokenType.Identifier)
             {
                 var expr = new IdentifierExpr(tok);
-                Next();
                 return expr;
             }
             else if (tok.Type == TokenType.Integer)
             {
                 var expr = new IntegerExpr(tok);
-                Next();
                 return expr;
             }
             else if (tok.Type == TokenType.String)
             {
                 var expr = new StringExpr(tok);
-                Next();
                 return expr;
             }
 
