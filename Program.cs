@@ -118,14 +118,14 @@ namespace MiniLISP
             // Create an evaluator with custom defined functions:
             var ev = new Evaluator()
             {
-                { "str", (v, e) => v.Eval(e.Parameters[0]).ToString() },
+                { "str", (v, e) => v.Eval(e[0]).ToString() },
                 { "qualify", (v, e) =>
                 {
-                    if (e.Parameters.Length != 2) throw new ArgumentException("qualify requires 2 parameters");
+                    if (e.Count != 2) throw new ArgumentException("qualify requires 2 parameters");
 
                     // Evaluate parameters:
-                    var prefix = v.EvalExpecting<string>(e.Parameters[0]);
-                    var list = v.EvalExpecting<object[]>(e.Parameters[1]);
+                    var prefix = v.EvalExpecting<string>(e[0]);
+                    var list = v.EvalExpecting<object[]>(e[1]);
 
                     var sb = new StringBuilder();
                     for (int i = 0; i < list.Length; ++i)
@@ -138,11 +138,11 @@ namespace MiniLISP
                 } },
                 { "prefix", (v, e) =>
                 {
-                    if (e.Parameters.Length != 2) throw new ArgumentException("prefix requires 2 parameters");
+                    if (e.Count != 2) throw new ArgumentException("prefix requires 2 parameters");
 
                     // Evaluate parameters:
-                    var prefix = v.EvalExpecting<string>(e.Parameters[0]);
-                    var list = v.EvalExpecting<object[]>(e.Parameters[1]);
+                    var prefix = v.EvalExpecting<string>(e[0]);
+                    var list = v.EvalExpecting<object[]>(e[1]);
 
                     var sb = new StringBuilder();
                     for (int i = 0; i < list.Length; ++i)

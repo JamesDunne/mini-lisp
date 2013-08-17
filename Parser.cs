@@ -314,6 +314,24 @@ namespace MiniLISP
             FuncName = funcName;
             Parameters = parameters;
         }
+
+        /// <summary>
+        /// Gets the count of parameters.
+        /// </summary>
+        public int Count
+        {
+            get { return Parameters.Length; }
+        }
+
+        /// <summary>
+        /// Gets the parameter s-expression at index <paramref name="index"/>.
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public SExpr this[int index]
+        {
+            get { return Parameters[index]; }
+        }
     }
 
     public sealed class ListExpr : SExpr
@@ -324,6 +342,24 @@ namespace MiniLISP
             : base(SExprKind.List, start, end)
         {
             Items = items;
+        }
+
+        /// <summary>
+        /// Gets the count of list items.
+        /// </summary>
+        public int Count
+        {
+            get { return Items.Length; }
+        }
+
+        /// <summary>
+        /// Gets the list item s-expression at index <paramref name="index"/>.
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public SExpr this[int index]
+        {
+            get { return Items[index]; }
         }
     }
 

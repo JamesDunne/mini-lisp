@@ -73,10 +73,10 @@ namespace MiniLISP
             else if (sexpr.Kind == SExprKind.List)
             {
                 var le = (ListExpr)sexpr;
-                var items = new object[le.Items.Length];
+                var items = new object[le.Count];
                 for (int i = 0; i < items.Length; ++i)
                 {
-                    items[i] = Eval(le.Items[i]);
+                    items[i] = Eval(le[i]);
                 }
                 return items;
             }
@@ -149,19 +149,21 @@ namespace MiniLISP
     {
         public static object Eval(Evaluator v, InvocationExpr e)
         {
-            if (e.Parameters.Length != 1) throw new ArgumentException("`eval` requires 1 parameter");
-            if (e.Parameters[0].Kind != SExprKind.Quote) throw new ArgumentException("`eval` parameter must be a quote");
+            if (e.Count != 1) throw new ArgumentException("`eval` requires 1 parameter");
+            
+            var quoteExpr = e[0] as QuoteExpr;
+            if (quoteExpr == null) throw new ArgumentException("`eval` parameter must be a quoted s-expression");
 
-            return v.Eval(((QuoteExpr)e.Parameters[0]).SExpr);
+            return v.Eval(((QuoteExpr)quoteExpr).SExpr);
         }
 
         public static object If(Evaluator v, InvocationExpr e)
         {
-            if (e.Parameters.Length != 3) throw new ArgumentException("`if` requires 3 parameters: condition, then, else");
+            if (e.Count != 3) throw new ArgumentException("`if` requires 3 parameters: condition, then, else");
 
-            var testExpr = e.Parameters[0];
-            var trueExpr = e.Parameters[1];
-            var falseExpr = e.Parameters[2];
+            var testExpr = e[0];
+            var trueExpr = e[1];
+            var falseExpr = e[2];
 
             // Eval the test s-expression:
             var test = v.Eval(testExpr);
@@ -193,10 +195,10 @@ namespace MiniLISP
 
         public static object Eq(Evaluator v, InvocationExpr e)
         {
-            if (e.Parameters.Length != 2) throw new ArgumentException("`eq` requires 2 parameters");
+            if (e.Count != 2) throw new ArgumentException("`eq` requires 2 parameters");
 
-            var aExpr = e.Parameters[0];
-            var bExpr = e.Parameters[1];
+            var aExpr = e[0];
+            var bExpr = e[1];
 
             object a = v.Eval(aExpr);
             object b = v.Eval(bExpr);
