@@ -32,12 +32,15 @@ namespace MiniLISP
                 @"(null)",
                 @"(())",
                 @"([] ())",
+                @"`",
 
                 // All should succeed:
                 @"true",
                 @"false",
                 @"null",
                 @"'test'",
+                @"`(if true true false)",
+                @"(eval `(if true true false))",
                 @"(if true 'hello' 'world')",
                 @"(if false 'hello' 'world')",
                 @"(if (eq true false) yes no)",
@@ -98,6 +101,11 @@ namespace MiniLISP
                     Console.Write("true");
                 else
                     Console.Write("false");
+            }
+            else if (result is SExpr)
+            {
+                var sexpr = (SExpr)result;
+                Console.Write("({0})".F(sexpr.Kind));
             }
             else
             {

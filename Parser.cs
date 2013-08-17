@@ -22,6 +22,7 @@ namespace MiniLISP
 
         // Basic primitives:
         Identifier,
+        Quote,
 
         Null,
         String,
@@ -128,6 +129,12 @@ namespace MiniLISP
                 else if (c == (int)']')
                 {
                     var tok = new Token(lpos, TokenType.BracketClose, ((char)c).ToString());
+                    c = Read();
+                    return tok;
+                }
+                else if (c == (int)'`')
+                {
+                    var tok = new Token(lpos, TokenType.Quote, ((char)c).ToString());
                     c = Read();
                     return tok;
                 }
@@ -250,6 +257,7 @@ namespace MiniLISP
     {
         Error,
 
+        Quote,
         Invocation,
         List,
 
@@ -316,6 +324,17 @@ namespace MiniLISP
             : base(SExprKind.List, start, end)
         {
             Items = items;
+        }
+    }
+
+    public sealed class QuoteExpr : SExpr
+    {
+        public readonly SExpr SExpr;
+
+        public QuoteExpr(Token start, Token end, SExpr sexpr)
+            : base(SExprKind.Quote, start, end)
+        {
+            SExpr = sexpr;
         }
     }
 
@@ -536,6 +555,17 @@ namespace MiniLISP
                 var end = tok;
 
                 return new ListExpr(start, end, items.ToArray());
+            }
+            else if (tok.Type == TokenType.Quote)
+            {
+                var start = tok;
+
+                var expr = ParseExpr();
+                if (expr.Kind == SExprKind.Error) return expr;
+
+                var end = tok;
+
+                return new QuoteExpr(start, end, expr);
             }
             else if (tok.Type == TokenType.Identifier)
             {

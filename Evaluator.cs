@@ -17,6 +17,7 @@ namespace MiniLISP
             // Define standard external functions:
             externs = new Dictionary<string, ExternFunction>()
             {
+                { "eval", StandardExternFunctions.Eval },
                 { "if", StandardExternFunctions.If },
                 { "eq", StandardExternFunctions.Eq },
             };
@@ -78,6 +79,10 @@ namespace MiniLISP
                     items[i] = Eval(le.Items[i]);
                 }
                 return items;
+            }
+            else if (sexpr.Kind == SExprKind.Quote)
+            {
+                return sexpr;
             }
             else if (sexpr.Kind == SExprKind.Integer)
             {
@@ -142,6 +147,14 @@ namespace MiniLISP
 
     public static class StandardExternFunctions
     {
+        public static object Eval(Evaluator v, InvocationExpr e)
+        {
+            if (e.Parameters.Length != 1) throw new ArgumentException("`eval` requires 1 parameter");
+            if (e.Parameters[0].Kind != SExprKind.Quote) throw new ArgumentException("`eval` parameter must be a quote");
+
+            return v.Eval(((QuoteExpr)e.Parameters[0]).SExpr);
+        }
+
         public static object If(Evaluator v, InvocationExpr e)
         {
             if (e.Parameters.Length != 3) throw new ArgumentException("`if` requires 3 parameters: condition, then, else");
