@@ -24,6 +24,11 @@ namespace MiniLISP
             };
         }
 
+        /// <summary>
+        /// Defines an external function.
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="func"></param>
         public void Add(string name, ExternFunction func)
         {
             if (String.IsNullOrEmpty(name))

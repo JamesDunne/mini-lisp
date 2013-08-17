@@ -139,7 +139,7 @@ namespace MiniLISP
                     return tok;
                 }
                 // Numerics:
-                else if (Char.IsDigit((char)c))
+                else if (Char.IsDigit((char)c) || c == '-')
                 {
                     // Simple/stupid numeric parser [0-9]+(\.[0-9]+)?:
                     int spos = lpos;
@@ -153,11 +153,8 @@ namespace MiniLISP
                         c = Read();
                         if (c == -1) break;
                         if (c == '.')
-                        {
                             hasDecimal = true;
-                            continue;
-                        }
-                    } while (Char.IsDigit((char)c));
+                    } while (Char.IsDigit((char)c) || c == '.');
 
                     // Determine the type of number by suffix or presence of decimal point:
                     var type = TokenType.Integer;
@@ -180,7 +177,7 @@ namespace MiniLISP
                     return new Token(spos, type, sb.ToString());
                 }
                 // Identifiers:
-                else if (Char.IsLetter((char)c) || c == (int)'-')
+                else if (Char.IsLetter((char)c))
                 {
                     // Parse an identifier ([A-Za-z][A-Za-z0-9\-]*):
                     int spos = lpos;
@@ -290,6 +287,12 @@ namespace MiniLISP
             var err = (ParserError)this;
             throw new ParserException(StartToken, err.Message);
         }
+
+        public virtual StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.Append("???");
+            return sb;
+        }
     }
 
     public sealed class ParserError : SExpr
@@ -332,6 +335,18 @@ namespace MiniLISP
         {
             get { return Parameters[index]; }
         }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.AppendFormat("({0}", FuncName.Text);
+            for (int i = 0; i < Count; ++i)
+            {
+                sb.Append(' ');
+                sb = this[i].AppendTo(sb);
+            }
+            sb.Append(')');
+            return sb;
+        }
     }
 
     public sealed class ListExpr : SExpr
@@ -361,6 +376,18 @@ namespace MiniLISP
         {
             get { return Items[index]; }
         }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.Append('[');
+            for (int i = 0; i < Count; ++i)
+            {
+                sb = this[i].AppendTo(sb);
+                if (i < Count - 1) sb.Append(' ');
+            }
+            sb.Append(']');
+            return sb;
+        }
     }
 
     public sealed class QuoteExpr : SExpr
@@ -372,6 +399,13 @@ namespace MiniLISP
         {
             SExpr = sexpr;
         }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.Append('`');
+            sb = SExpr.AppendTo(sb);
+            return sb;
+        }
     }
 
     public sealed class IdentifierExpr : SExpr
@@ -380,6 +414,12 @@ namespace MiniLISP
             : base(SExprKind.Identifier, token, token)
         {
             if (token.Type != TokenType.Identifier) throw new ArgumentException("token must be of type Identifier for an IdentifierExpr");
+        }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.Append(StartToken.Text);
+            return sb;
         }
     }
 
@@ -393,6 +433,12 @@ namespace MiniLISP
             if (token.Type != TokenType.Integer) throw new ArgumentException("token must be of type Integer for an IntegerExpr");
             Value = value;
         }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.Append(Value.ToString());
+            return sb;
+        }
     }
 
     public sealed class DecimalExpr : SExpr
@@ -404,6 +450,12 @@ namespace MiniLISP
         {
             if (token.Type != TokenType.Decimal) throw new ArgumentException("token must be of type Decimal for a DecimalExpr");
             Value = value;
+        }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.Append(Value.ToString());
+            return sb;
         }
     }
 
@@ -417,6 +469,13 @@ namespace MiniLISP
             if (token.Type != TokenType.Double) throw new ArgumentException("token must be of type Double for a DoubleExpr");
             Value = value;
         }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.Append(Value.ToString());
+            sb.Append('d');
+            return sb;
+        }
     }
 
     public sealed class FloatExpr : SExpr
@@ -428,6 +487,13 @@ namespace MiniLISP
         {
             if (token.Type != TokenType.Float) throw new ArgumentException("token must be of type Float for a FloatExpr");
             Value = value;
+        }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.Append(Value.ToString());
+            sb.Append('f');
+            return sb;
         }
     }
 
@@ -441,6 +507,35 @@ namespace MiniLISP
             if (token.Type != TokenType.String) throw new ArgumentException("token must be of type String for a StringExpr");
             Value = token.Text;
         }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            Format(Value, sb);
+            return sb;
+        }
+
+        public static StringBuilder Format(string value, StringBuilder sb = null)
+        {
+            if (sb == null) sb = new StringBuilder();
+            sb.Append('\'');
+            foreach (char c in value)
+            {
+                if (c == '\\')
+                    sb.Append("\\\\");
+                else if (c == '\'')
+                    sb.Append("\\\'");
+                else if (c == '\n')
+                    sb.Append("\\n");
+                else if (c == '\r')
+                    sb.Append("\\r");
+                else if (c == '\t')
+                    sb.Append("\\t");
+                else
+                    sb.Append(c);
+            }
+            sb.Append('\'');
+            return sb;
+        }
     }
 
     public sealed class BooleanExpr : SExpr
@@ -453,6 +548,15 @@ namespace MiniLISP
             if (token.Type != TokenType.Boolean) throw new ArgumentException("token must be of type Boolean for a BooleanExpr");
             Value = value;
         }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            if (Value)
+                sb.Append("true");
+            else
+                sb.Append("false");
+            return sb;
+        }
     }
 
     public sealed class NullExpr : SExpr
@@ -461,6 +565,12 @@ namespace MiniLISP
             : base(SExprKind.Null, token, token)
         {
             if (token.Type != TokenType.Null) throw new ArgumentException("token must be of type Null for a NullExpr");
+        }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.Append("null");
+            return sb;
         }
     }
 
@@ -613,7 +723,7 @@ namespace MiniLISP
                 long val;
 
                 if (!Int64.TryParse(tok.Text, out val))
-                    return new ParserError(tok, "Could not parse integer as an Int64: '{0}'".F(tok.Text));
+                    return new ParserError(tok, "Could not parse '{0}' as an Int64".F(tok.Text));
 
                 var expr = new IntegerExpr(tok, val);
                 return expr;
@@ -627,7 +737,7 @@ namespace MiniLISP
             {
                 bool val;
                 if (!Boolean.TryParse(tok.Text, out val))
-                    return new ParserError(tok, "Could not parse boolean: '{0}'".F(tok.Text));
+                    return new ParserError(tok, "Could not parse '{0}' as a boolean".F(tok.Text));
 
                 var expr = new BooleanExpr(tok, val);
                 return expr;
@@ -642,7 +752,7 @@ namespace MiniLISP
                 decimal val;
 
                 if (!Decimal.TryParse(tok.Text, out val))
-                    return new ParserError(tok, "Could not parse decimal: '{0}'".F(tok.Text));
+                    return new ParserError(tok, "Could not parse '{0}' as a decimal".F(tok.Text));
 
                 var expr = new DecimalExpr(tok, val);
                 return expr;
@@ -652,7 +762,7 @@ namespace MiniLISP
                 double val;
 
                 if (!Double.TryParse(tok.Text, out val))
-                    return new ParserError(tok, "Could not parse double: '{0}'".F(tok.Text));
+                    return new ParserError(tok, "Could not parse '{0}' as a double".F(tok.Text));
 
                 var expr = new DoubleExpr(tok, val);
                 return expr;
@@ -662,7 +772,7 @@ namespace MiniLISP
                 float val;
 
                 if (!Single.TryParse(tok.Text, out val))
-                    return new ParserError(tok, "Could not parse float: '{0}'".F(tok.Text));
+                    return new ParserError(tok, "Could not parse '{0}' as a float".F(tok.Text));
 
                 var expr = new FloatExpr(tok, val);
                 return expr;

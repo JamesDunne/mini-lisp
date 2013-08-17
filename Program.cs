@@ -33,6 +33,7 @@ namespace MiniLISP
                 @"(())",
                 @"([] ())",
                 @"`",
+                @"-",
 
                 // All should succeed:
                 @"true",
@@ -51,6 +52,23 @@ namespace MiniLISP
                 @"(if (ne false false) yes no)",
                 @"(if (ne false false) true null)",
                 @"(if (ne null null) true null)",
+                @"'hello
+world'",
+                @"'hello\nworld'",
+                @"'hello\t\rworld'",
+                @"'hello \'world\''",
+                @"'hello ""world""'",
+                @"`'test'",
+                @"`1.34",
+                @"`1.34d",
+                @"`1.34f",
+                @"1.333333333333333333333333333333333333",
+                @"1.333333333333333333333333333333333333d",
+                @"1.333333333333333333333333333333333333f",
+                @"1",
+                @"008",
+                @"-1",
+                @"[10 -3]",
             };
 
             var ev = new Evaluator();
@@ -86,8 +104,8 @@ namespace MiniLISP
             }
             else if (result is string)
             {
-                // TODO(jsd): proper escape sequences:
-                Console.Write("'{0}'", (string)result);
+                var quotedStr = StringExpr.Format((string)result).ToString();
+                Console.Write(quotedStr);
             }
             else if ((results = result as object[]) != null)
             {
@@ -109,7 +127,9 @@ namespace MiniLISP
             else if (result is SExpr)
             {
                 var sexpr = (SExpr)result;
-                Console.Write("({0})".F(sexpr.Kind));
+                var sb = new StringBuilder();
+                sb = sexpr.AppendTo(sb);
+                Console.Write(sb.ToString());
             }
             else
             {
