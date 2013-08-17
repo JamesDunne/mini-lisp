@@ -20,6 +20,7 @@ namespace MiniLISP
                 { "eval", StandardExternFunctions.Eval },
                 { "if", StandardExternFunctions.If },
                 { "eq", StandardExternFunctions.Eq },
+                { "ne", StandardExternFunctions.Ne },
             };
         }
 
@@ -149,17 +150,17 @@ namespace MiniLISP
     {
         public static object Eval(Evaluator v, InvocationExpr e)
         {
-            if (e.Count != 1) throw new ArgumentException("`eval` requires 1 parameter");
+            if (e.Count != 1) throw new Exception("`eval` requires 1 parameter");
             
             var quoteExpr = e[0] as QuoteExpr;
-            if (quoteExpr == null) throw new ArgumentException("`eval` parameter must be a quoted s-expression");
+            if (quoteExpr == null) throw new Exception("`eval` parameter must be a quoted s-expression");
 
             return v.Eval(((QuoteExpr)quoteExpr).SExpr);
         }
 
         public static object If(Evaluator v, InvocationExpr e)
         {
-            if (e.Count != 3) throw new ArgumentException("`if` requires 3 parameters: condition, then, else");
+            if (e.Count != 3) throw new Exception("`if` requires 3 parameters: condition, then, else");
 
             var testExpr = e[0];
             var trueExpr = e[1];
@@ -195,13 +196,10 @@ namespace MiniLISP
 
         public static object Eq(Evaluator v, InvocationExpr e)
         {
-            if (e.Count != 2) throw new ArgumentException("`eq` requires 2 parameters");
+            if (e.Count != 2) throw new Exception("`eq` requires 2 parameters");
 
-            var aExpr = e[0];
-            var bExpr = e[1];
-
-            object a = v.Eval(aExpr);
-            object b = v.Eval(bExpr);
+            var a = v.Eval(e[0]);
+            var b = v.Eval(e[1]);
 
             if (a == null && b == null)
                 return true;
@@ -209,6 +207,21 @@ namespace MiniLISP
                 return false;
             else
                 return a.Equals(b);
+        }
+
+        public static object Ne(Evaluator v, InvocationExpr e)
+        {
+            if (e.Count != 2) throw new Exception("`ne` requires 2 parameters");
+
+            var a = v.Eval(e[0]);
+            var b = v.Eval(e[1]);
+
+            if (a == null && b == null)
+                return false;
+            else if (a == null || b == null)
+                return true;
+            else
+                return !a.Equals(b);
         }
     }
 }

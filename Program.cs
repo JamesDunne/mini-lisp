@@ -47,6 +47,10 @@ namespace MiniLISP
                 @"(if (eq false false) yes no)",
                 @"(if (eq false false) true null)",
                 @"(if (eq null null) true null)",
+                @"(if (ne true false) yes no)",
+                @"(if (ne false false) yes no)",
+                @"(if (ne false false) true null)",
+                @"(if (ne null null) true null)",
             };
 
             var ev = new Evaluator();
