@@ -22,8 +22,15 @@ namespace MiniLISP
 
         // Basic primitives:
         Identifier,
+
+        Null,
         String,
-        Integer
+        Boolean,
+
+        Integer,
+        Decimal,
+        Double,
+        Float,
     }
 
     public class Token
@@ -124,26 +131,53 @@ namespace MiniLISP
                     c = Read();
                     return tok;
                 }
-                // Just integers for now, no decimals or floats:
+                // Numerics:
                 else if (Char.IsDigit((char)c))
                 {
-                    // Simple/stupid integer parser [0-9]+:
+                    // Simple/stupid numeric parser [0-9]+(\.[0-9]+)?:
                     int spos = lpos;
+                    bool hasDecimal = false;
+
                     var sb = new StringBuilder(10);
                     do
                     {
                         sb.Append((char)c);
+
                         c = Read();
                         if (c == -1) break;
+                        if (c == '.')
+                        {
+                            hasDecimal = true;
+                            continue;
+                        }
                     } while (Char.IsDigit((char)c));
-                    return new Token(spos, TokenType.Integer, sb.ToString());
+
+                    // Determine the type of number by suffix or presence of decimal point:
+                    var type = TokenType.Integer;
+                    if (c == 'd')
+                    {
+                        c = Read();
+                        type = TokenType.Double;
+                    }
+                    else if (c == 'f')
+                    {
+                        c = Read();
+                        type = TokenType.Float;
+                    }
+                    else if (hasDecimal)
+                    {
+                        // Default to decimal type if have a decimal point:
+                        type = TokenType.Decimal;
+                    }
+
+                    return new Token(spos, type, sb.ToString());
                 }
                 // Identifiers:
                 else if (Char.IsLetter((char)c) || c == (int)'-')
                 {
-                    // Parse an identifier:
-                    // ([A-Za-z][A-Za-z0-9\-]*)
+                    // Parse an identifier ([A-Za-z][A-Za-z0-9\-]*):
                     int spos = lpos;
+
                     var sb = new StringBuilder(10);
                     do
                     {
@@ -152,7 +186,15 @@ namespace MiniLISP
                         if (c == -1) break;
                     } while (Char.IsLetterOrDigit((char)c) || c == (int)'-');
 
-                    return new Token(spos, TokenType.Identifier, sb.ToString());
+                    var ident = sb.ToString();
+                    if (String.Equals(ident, "true"))
+                        return new Token(spos, TokenType.Boolean, ident);
+                    else if (String.Equals(ident, "false"))
+                        return new Token(spos, TokenType.Boolean, ident);
+                    else if (String.Equals(ident, "null"))
+                        return new Token(spos, TokenType.Null, ident);
+                    else
+                        return new Token(spos, TokenType.Identifier, sb.ToString());
                 }
                 // Quoted strings:
                 // NOTE(jsd): We avoid double quotes since we will be writing this language in a C# const string literal.
@@ -213,7 +255,12 @@ namespace MiniLISP
 
         Identifier,
         String,
-        Integer
+        Integer,
+        Boolean,
+        Null,
+        Decimal,
+        Double,
+        Float,
     }
 
     public abstract class SExpr
@@ -281,21 +328,84 @@ namespace MiniLISP
         }
     }
 
-    public sealed class IntegerExpr : SExpr
+    public class IntegerExpr : SExpr
     {
-        public IntegerExpr(Token token)
+        public readonly long Value;
+
+        public IntegerExpr(Token token, long value)
             : base(SExprKind.Integer, token, token)
         {
             if (token.Type != TokenType.Integer) throw new ArgumentException("token must be of type Integer for an IntegerExpr");
+            Value = value;
+        }
+    }
+
+    public sealed class DecimalExpr : SExpr
+    {
+        public readonly decimal Value;
+
+        public DecimalExpr(Token token, decimal value)
+            : base(SExprKind.Decimal, token, token)
+        {
+            if (token.Type != TokenType.Decimal) throw new ArgumentException("token must be of type Decimal for a DecimalExpr");
+            Value = value;
+        }
+    }
+
+    public sealed class DoubleExpr : SExpr
+    {
+        public readonly double Value;
+
+        public DoubleExpr(Token token, double value)
+            : base(SExprKind.Double, token, token)
+        {
+            if (token.Type != TokenType.Double) throw new ArgumentException("token must be of type Double for a DoubleExpr");
+            Value = value;
+        }
+    }
+
+    public sealed class FloatExpr : SExpr
+    {
+        public readonly float Value;
+
+        public FloatExpr(Token token, float value)
+            : base(SExprKind.Float, token, token)
+        {
+            if (token.Type != TokenType.Float) throw new ArgumentException("token must be of type Float for a FloatExpr");
+            Value = value;
         }
     }
 
     public sealed class StringExpr : SExpr
     {
+        public readonly string Value;
+
         public StringExpr(Token token)
             : base(SExprKind.String, token, token)
         {
             if (token.Type != TokenType.String) throw new ArgumentException("token must be of type String for a StringExpr");
+            Value = token.Text;
+        }
+    }
+
+    public sealed class BooleanExpr : SExpr
+    {
+        public bool Value;
+
+        public BooleanExpr(Token token, bool value)
+            : base(SExprKind.Boolean, token, token)
+        {
+            if (token.Type != TokenType.Boolean) throw new ArgumentException("token must be of type Boolean for a BooleanExpr");
+            Value = value;
+        }
+    }
+
+    public sealed class NullExpr : SExpr
+    {
+        public NullExpr(Token token)
+            : base(SExprKind.Null, token, token)
+        {
+            if (token.Type != TokenType.Null) throw new ArgumentException("token must be of type Null for a NullExpr");
         }
     }
 
@@ -434,12 +544,61 @@ namespace MiniLISP
             }
             else if (tok.Type == TokenType.Integer)
             {
-                var expr = new IntegerExpr(tok);
+                long val;
+
+                if (!Int64.TryParse(tok.Text, out val))
+                    return new ParserError(tok, "Could not parse integer as an Int64: '{0}'".F(tok.Text));
+
+                var expr = new IntegerExpr(tok, val);
                 return expr;
             }
             else if (tok.Type == TokenType.String)
             {
                 var expr = new StringExpr(tok);
+                return expr;
+            }
+            else if (tok.Type == TokenType.Boolean)
+            {
+                bool val;
+                if (!Boolean.TryParse(tok.Text, out val))
+                    return new ParserError(tok, "Could not parse boolean: '{0}'".F(tok.Text));
+
+                var expr = new BooleanExpr(tok, val);
+                return expr;
+            }
+            else if (tok.Type == TokenType.Null)
+            {
+                var expr = new NullExpr(tok);
+                return expr;
+            }
+            else if (tok.Type == TokenType.Decimal)
+            {
+                decimal val;
+
+                if (!Decimal.TryParse(tok.Text, out val))
+                    return new ParserError(tok, "Could not parse decimal: '{0}'".F(tok.Text));
+
+                var expr = new DecimalExpr(tok, val);
+                return expr;
+            }
+            else if (tok.Type == TokenType.Double)
+            {
+                double val;
+
+                if (!Double.TryParse(tok.Text, out val))
+                    return new ParserError(tok, "Could not parse double: '{0}'".F(tok.Text));
+
+                var expr = new DoubleExpr(tok, val);
+                return expr;
+            }
+            else if (tok.Type == TokenType.Float)
+            {
+                float val;
+
+                if (!Single.TryParse(tok.Text, out val))
+                    return new ParserError(tok, "Could not parse float: '{0}'".F(tok.Text));
+
+                var expr = new FloatExpr(tok, val);
                 return expr;
             }
 

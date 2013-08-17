@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace MiniLISP
 {
-    public delegate object ExternFunction(Evaluator eval, InvocationExpr invexp);
+    public delegate object ExternFunction(Evaluator v, InvocationExpr e);
 
     public sealed class Evaluator : IEnumerable<KeyValuePair<string, ExternFunction>>
     {
@@ -14,7 +14,12 @@ namespace MiniLISP
 
         public Evaluator()
         {
-            externs = new Dictionary<string, ExternFunction>();
+            // Define standard external functions:
+            externs = new Dictionary<string, ExternFunction>()
+            {
+                { "if", StandardExternFunctions.If },
+                { "eq", StandardExternFunctions.Eq },
+            };
         }
 
         public void Add(string name, ExternFunction func)
@@ -42,18 +47,6 @@ namespace MiniLISP
             return externs.GetEnumerator();
         }
 
-        public object Invoke(InvocationExpr invexp)
-        {
-            // Find the function in the `externs` dictionary:
-            ExternFunction func;
-            var name = invexp.FuncName.Text;
-            if (!externs.TryGetValue(name, out func))
-                throw new Exception("Undefined function '{0}'".F(name));
-
-            // Execute it:
-            return func(this, invexp);
-        }
-
         public T EvalExpecting<T>(SExpr sexpr)
         {
             object val = Eval(sexpr);
@@ -68,17 +61,13 @@ namespace MiniLISP
         {
             sexpr.ThrowIfError();
 
-            if (sexpr.Kind == SExprKind.Integer)
-            {
-                return Int32.Parse(sexpr.StartToken.Text);
-            }
-            else if (sexpr.Kind == SExprKind.String)
+            if (sexpr.Kind == SExprKind.Identifier)
             {
                 return sexpr.StartToken.Text;
             }
-            else if (sexpr.Kind == SExprKind.Identifier)
+            else if (sexpr.Kind == SExprKind.Invocation)
             {
-                return sexpr.StartToken.Text;
+                return Invoke((InvocationExpr)sexpr);
             }
             else if (sexpr.Kind == SExprKind.List)
             {
@@ -90,12 +79,36 @@ namespace MiniLISP
                 }
                 return items;
             }
-            else if (sexpr.Kind == SExprKind.Invocation)
+            else if (sexpr.Kind == SExprKind.Integer)
             {
-                return Invoke((InvocationExpr)sexpr);
+                return ((IntegerExpr)sexpr).Value;
+            }
+            else if (sexpr.Kind == SExprKind.Boolean)
+            {
+                return ((BooleanExpr)sexpr).Value;
+            }
+            else if (sexpr.Kind == SExprKind.Null)
+            {
+                return null;
+            }
+            else if (sexpr.Kind == SExprKind.String)
+            {
+                return sexpr.StartToken.Text;
+            }
+            else if (sexpr.Kind == SExprKind.Decimal)
+            {
+                return ((DecimalExpr)sexpr).Value;
+            }
+            else if (sexpr.Kind == SExprKind.Double)
+            {
+                return ((DoubleExpr)sexpr).Value;
+            }
+            else if (sexpr.Kind == SExprKind.Float)
+            {
+                return ((FloatExpr)sexpr).Value;
             }
 
-            throw new InvalidOperationException();
+            throw new Exception("Unknown expression kind: '{0}'".F(sexpr.Kind));
         }
 
         public object[] Eval(SExpr[] sexprs)
@@ -109,6 +122,78 @@ namespace MiniLISP
                 results[i] = Eval(sexprs[i]);
             }
             return results;
+        }
+
+        public object Invoke(InvocationExpr e)
+        {
+            // Check the function name:
+            var name = e.FuncName.Text;
+            // TODO(jsd): Support CLR property/method invocation for objects!
+
+            // Find the function in the `externs` dictionary:
+            ExternFunction func;
+            if (!externs.TryGetValue(name, out func))
+                throw new Exception("Undefined function '{0}'".F(name));
+
+            // Execute it:
+            return func(this, e);
+        }
+    }
+
+    public static class StandardExternFunctions
+    {
+        public static object If(Evaluator v, InvocationExpr e)
+        {
+            if (e.Parameters.Length != 3) throw new ArgumentException("`if` requires 3 parameters: condition, then, else");
+
+            var testExpr = e.Parameters[0];
+            var trueExpr = e.Parameters[1];
+            var falseExpr = e.Parameters[2];
+
+            // Eval the test s-expression:
+            var test = v.Eval(testExpr);
+            if (test == null)
+            {
+                // Null is logically false:
+                return v.Eval(falseExpr);
+            }
+            else
+            {
+                // Check if the test value is a boolean or not:
+                if (test is bool)
+                {
+                    // Test the boolean value:
+                    if ((bool)test)
+                        return v.Eval(trueExpr);
+                    else
+                        return v.Eval(falseExpr);
+                }
+                else if (!test.GetType().IsValueType)
+                {
+                    // Non-null reference is logically true:
+                    return v.Eval(trueExpr);
+                }
+                else
+                    throw new Exception("`if` condition parameter must be a boolean or reference type");
+            }
+        }
+
+        public static object Eq(Evaluator v, InvocationExpr e)
+        {
+            if (e.Parameters.Length != 2) throw new ArgumentException("`eq` requires 2 parameters");
+
+            var aExpr = e.Parameters[0];
+            var bExpr = e.Parameters[1];
+
+            object a = v.Eval(aExpr);
+            object b = v.Eval(bExpr);
+
+            if (a == null && b == null)
+                return true;
+            else if (a == null || b == null)
+                return false;
+            else
+                return a.Equals(b);
         }
     }
 }
