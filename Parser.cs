@@ -48,6 +48,9 @@ namespace MiniLISP
         }
     }
 
+    /// <summary>
+    /// MiniLISP lexer for the parser.
+    /// </summary>
     public sealed class Lexer
     {
         readonly TextReader tr;
@@ -304,6 +307,14 @@ namespace MiniLISP
         {
             Message = message;
         }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.Append("(ERROR ");
+            sb = StringExpr.Format(Message, sb);
+            sb.Append(')');
+            return sb;
+        }
     }
 
     public sealed class InvocationExpr : SExpr
@@ -514,6 +525,12 @@ namespace MiniLISP
             return sb;
         }
 
+        /// <summary>
+        /// Formats the given string as a quoted string literal including backslash escape sequences.
+        /// </summary>
+        /// <param name="value"></param>
+        /// <param name="sb"></param>
+        /// <returns></returns>
         public static StringBuilder Format(string value, StringBuilder sb = null)
         {
             if (sb == null) sb = new StringBuilder();
@@ -574,6 +591,9 @@ namespace MiniLISP
         }
     }
 
+    /// <summary>
+    /// MiniLISP parser.
+    /// </summary>
     public sealed class Parser
     {
         readonly Lexer lex;

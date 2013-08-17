@@ -74,13 +74,20 @@ world'",
             var ev = new Evaluator();
             for (int i = 0; i < codes.Length; ++i)
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.Write("[{0,3}]: ", i);
-                Console.ForegroundColor = ConsoleColor.White;
+                string code = codes[i];
                 try
                 {
-                    var prs = new Parser(new Lexer(new StringReader(codes[i])));
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.Write("[{0,3}]: ", i);
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                    var prs = new Parser(new Lexer(new StringReader(code)));
                     var expr = prs.ParseExpr();
+                    // Output the s-expression:
+                    var sb = new StringBuilder();
+                    Console.WriteLine(expr.AppendTo(sb).ToString());
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.Write("=> ");
+                    Console.ForegroundColor = ConsoleColor.White;
                     // Evaluate and output:
                     var result = ev.Eval(expr);
                     Output(result);
