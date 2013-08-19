@@ -56,6 +56,11 @@ world'",
                 @"'hello\t\rworld'",
                 @"'hello \'world\''",
                 @"'hello ""world""'",
+                @"`multiline
+raw
+string literal with ""quotes"" inside
+it and 'quotes' too.
+<html> is possible here.`",
                 @"~'test'",
                 @"~1.34",
                 @"~1.34d",
@@ -68,7 +73,9 @@ world'",
                 @"-1",
                 @"[10 -3]",
 
-                @"(.ToString (System.DateTime/Now) 'yyyyMMdd')"
+                @"(.ToString (System.DateTime/Now) 'yyyyMMdd')",
+                @"(. ToString (System . DateTime/Now) 'yyyyMMdd')",
+                @"(.ToString (System. DateTime / Now) 'yyyyMMdd')"
             };
 
             var ev = new Evaluator();
