@@ -10,10 +10,72 @@ namespace MiniLISP
 
     public sealed class Evaluator : IEnumerable<KeyValuePair<string, ExternFunction>>
     {
+        public class Storage
+        {
+            public Type Type;
+            public object Value;
+
+            public Storage(Type type, object value = null)
+            {
+                if (type == null) throw new ArgumentNullException("type");
+
+                Type = type;
+                Value = value;
+            }
+        }
+
+        public sealed class NamedStorage : Storage
+        {
+            public readonly string Name;
+
+            public NamedStorage(string name, Type type, object value = null)
+                : base(type, value)
+            {
+                if (String.IsNullOrEmpty(name)) throw new ArgumentNullException("name");
+
+                Name = name;
+            }
+        }
+
+        sealed class VariableScope
+        {
+            public readonly VariableScope Parent;
+            public readonly Dictionary<string, NamedStorage> Variables;
+
+            public VariableScope(VariableScope parent)
+            {
+                Parent = parent;
+                Variables = new Dictionary<string, NamedStorage>();
+            }
+
+            public bool TryGetVariable(string name, out NamedStorage variable)
+            {
+                // Do we have it?
+                if (Variables.TryGetValue(name, out variable))
+                    return true;
+
+                // Search the parent scope:
+                if (Parent != null)
+                    return Parent.TryGetVariable(name, out variable);
+
+                // Not found:
+                return false;
+            }
+
+            internal void Add(NamedStorage variable)
+            {
+                Variables.Add(variable.Name, variable);
+            }
+        }
+
         Dictionary<string, ExternFunction> externs;
+        VariableScope globalScope;
+        VariableScope scope;
 
         public Evaluator()
         {
+            scope = globalScope = new VariableScope(null);
+
             // Define standard external functions:
             externs = new Dictionary<string, ExternFunction>()
             {
@@ -22,6 +84,11 @@ namespace MiniLISP
                 { "eq", StandardExternFunctions.Eq },
                 { "ne", StandardExternFunctions.Ne },
             };
+        }
+
+        public void AddGlobal(NamedStorage variable)
+        {
+            globalScope.Add(variable);
         }
 
         /// <summary>
@@ -70,6 +137,8 @@ namespace MiniLISP
 
             if (sexpr.Kind == SExprKind.ScopedIdentifier)
             {
+                // TODO(jsd): Search current `scope` for the identifier.
+                // Also support alternative behavior like this for pure data lists:
                 return sexpr.StartToken.Text;
             }
             else if (sexpr.Kind == SExprKind.Invocation)
