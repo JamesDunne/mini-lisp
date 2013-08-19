@@ -15,7 +15,7 @@ namespace MiniLISP
         {
             // With apologies to Philip Greenspun.
 
-            string[] codes = new string[]
+            string[] badCodes = new string[]
             {
                 // All should error:
                 @"",
@@ -33,6 +33,11 @@ namespace MiniLISP
                 @"~",
                 @"-",
 
+                @"(.ToString null)",
+            };
+
+            string[] goodCodes = new string[]
+            {
                 // All should succeed:
                 @"true",
                 @"false",
@@ -73,40 +78,93 @@ it and 'quotes' too.
                 @"-1",
                 @"[10 -3]",
 
+                // NOTE(jsd): Currently, whitespace separators are ignored for parsing purposes. This is subject to change.
                 @"(.ToString (System.DateTime/Now) 'yyyyMMdd')",
                 @"(. ToString (System . DateTime/Now) 'yyyyMMdd')",
-                @"(.ToString (System. DateTime / Now) 'yyyyMMdd')"
+                @"(.ToString (System. DateTime / Now) 'yyyyMMdd')",
+
+                // TODO: add, inc, dec functions and possibly other basics:
+                //@"(add x y)",
+                //@"(inc 1)",
+                //@"(dec 1)",
+                // TODO: let with scoping
+                //@"(let [x 1, y 2] (add x y))",
             };
 
-            var ev = new Evaluator();
-            for (int i = 0; i < codes.Length; ++i)
             {
-                Console.WriteLine();
-                string code = codes[i];
-                try
+                int pass = 0, fail = 0;
+
+                // Test the bad codes which should always fail:
+                for (int i = 0; i < badCodes.Length; ++i)
                 {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.Write("[{0,3}]: ", i);
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    var prs = new Parser(new Lexer(new StringReader(code)));
-                    var expr = prs.ParseExpr();
-                    // Output the s-expression:
-                    var sb = new StringBuilder();
-                    Console.WriteLine(expr.AppendTo(sb).ToString());
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.Write("    => ");
-                    Console.ForegroundColor = ConsoleColor.White;
-                    // Evaluate and output:
-                    var result = ev.Eval(expr);
-                    Output(result);
+                    string code = badCodes[i];
+
+                    try
+                    {
+                        var prs = new Parser(new Lexer(new StringReader(code)));
+                        var expr = prs.ParseExpr();
+
+                        // Evaluate:
+                        var ev = new Evaluator();
+                        var result = ev.Eval(expr);
+
+                        // Failed! Should've gotten some sort of exception.
+                        ++fail;
+                    }
+                    catch (Exception)
+                    {
+                        ++pass;
+                    }
                 }
-                catch (Exception ex)
+
+                Console.WriteLine("{0,3}/{1,3} failure tests passed", pass, pass + fail);
+            }
+
+            {
+                int pass = 0, fail = 0;
+
+                // Test the good codes which should always pass:
+                for (int i = 0; i < goodCodes.Length; ++i)
                 {
-                    Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.Write(ex);
-                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine();
+                    string code = goodCodes[i];
+
+                    try
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.Write("[{0,3}]: ", i);
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.WriteLine(code);
+
+                        var prs = new Parser(new Lexer(new StringReader(code)));
+                        var expr = prs.ParseExpr();
+
+                        // Output the s-expression:
+                        var sb = new StringBuilder();
+                        Console.Write("       ");
+                        Console.WriteLine(expr.AppendTo(sb).ToString());
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.Write("    => ");
+                        Console.ForegroundColor = ConsoleColor.White;
+
+                        // Evaluate and output:
+                        var ev = new Evaluator();
+                        var result = ev.Eval(expr);
+
+                        ++pass;
+                        Output(result);
+                    }
+                    catch (Exception ex)
+                    {
+                        ++fail;
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.Write(ex);
+                        Console.ForegroundColor = ConsoleColor.White;
+                    }
+                    Console.WriteLine();
                 }
-                Console.WriteLine();
+
+                Console.WriteLine("{0,3}/{1,3} success tests passed", pass, pass + fail);
             }
         }
 

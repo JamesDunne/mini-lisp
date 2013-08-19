@@ -516,7 +516,7 @@ namespace MiniLISP
 
         public override StringBuilder AppendTo(StringBuilder sb)
         {
-            sb.Append('`');
+            sb.Append('~');
             sb = SExpr.AppendTo(sb);
             return sb;
         }

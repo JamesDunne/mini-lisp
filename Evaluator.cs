@@ -208,7 +208,7 @@ namespace MiniLISP
 
                 var instance = Eval(e[0]);
                 if (instance == null)
-                    throw new Exception("Cannot call a method on a null object instance");
+                    throw new Exception("Cannot call method or property '{0}' on a null object instance".F(memberName));
 
                 var type = instance.GetType();
 
