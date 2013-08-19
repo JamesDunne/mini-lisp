@@ -30,7 +30,7 @@ namespace MiniLISP
                 @"(null)",
                 @"(())",
                 @"([] ())",
-                @"`",
+                @"~",
                 @"-",
 
                 // All should succeed:
@@ -38,8 +38,8 @@ namespace MiniLISP
                 @"false",
                 @"null",
                 @"'test'",
-                @"`(if true true false)",
-                @"(eval `(if true true false))",
+                @"~(if true true false)",
+                @"(eval ~(if true true false))",
                 @"(if true 'hello' 'world')",
                 @"(if false 'hello' 'world')",
                 @"(if (eq true false) yes no)",
@@ -56,10 +56,10 @@ world'",
                 @"'hello\t\rworld'",
                 @"'hello \'world\''",
                 @"'hello ""world""'",
-                @"`'test'",
-                @"`1.34",
-                @"`1.34d",
-                @"`1.34f",
+                @"~'test'",
+                @"~1.34",
+                @"~1.34d",
+                @"~1.34f",
                 @"1.333333333333333333333333333333333333",
                 @"1.333333333333333333333333333333333333d",
                 @"1.333333333333333333333333333333333333f",
@@ -67,11 +67,14 @@ world'",
                 @"008",
                 @"-1",
                 @"[10 -3]",
+
+                @"(.ToString (System.DateTime/Now) 'yyyyMMdd')"
             };
 
             var ev = new Evaluator();
             for (int i = 0; i < codes.Length; ++i)
             {
+                Console.WriteLine();
                 string code = codes[i];
                 try
                 {
@@ -84,7 +87,7 @@ world'",
                     var sb = new StringBuilder();
                     Console.WriteLine(expr.AppendTo(sb).ToString());
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.Write("=> ");
+                    Console.Write("    => ");
                     Console.ForegroundColor = ConsoleColor.White;
                     // Evaluate and output:
                     var result = ev.Eval(expr);

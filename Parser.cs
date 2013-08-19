@@ -19,10 +19,12 @@ namespace MiniLISP
         ParenClose,
         BracketOpen,
         BracketClose,
+        Quote,
+        Dot,
+        Slash,
 
         // Basic primitives:
         Identifier,
-        Quote,
 
         Null,
         String,
@@ -100,8 +102,8 @@ namespace MiniLISP
                 // EOF:
                 if (c == -1 || c == 0) return new Token(pos, TokenType.EOF, null);
 
-                // Skip whitespace:
-                if (c == ' ' || c == '\n' || c == '\r')
+                // Skip whitespace (commas are whitespace too):
+                if (c == ' ' || c == '\t' || c == ',' || c == '\n' || c == '\r')
                 {
                     c = Read();
                     continue;
@@ -135,11 +137,94 @@ namespace MiniLISP
                     c = Read();
                     return tok;
                 }
-                else if (c == (int)'`')
+                // Punctuation:
+                else if (c == (int)'~')
                 {
                     var tok = new Token(lpos, TokenType.Quote, ((char)c).ToString());
                     c = Read();
                     return tok;
+                }
+                else if (c == '.')
+                {
+                    var tok = new Token(lpos, TokenType.Dot, ((char)c).ToString());
+                    c = Read();
+                    return tok;
+                }
+                else if (c == '/')
+                {
+                    var tok = new Token(lpos, TokenType.Slash, ((char)c).ToString());
+                    c = Read();
+                    return tok;
+                }
+                // Identifiers:
+                else if (Char.IsLetter((char)c) || c == '_')
+                {
+                    // Parse an identifier ([A-Za-z][A-Za-z0-9\-_]*):
+                    int spos = lpos;
+
+                    var sb = new StringBuilder(10);
+                    do
+                    {
+                        sb.Append((char)c);
+                        c = Read();
+                        if (c == -1) break;
+                    } while (Char.IsLetterOrDigit((char)c) || c == '-' || c == '_');
+
+                    var ident = sb.ToString();
+                    if (String.Equals(ident, "true"))
+                        return new Token(spos, TokenType.Boolean, ident);
+                    else if (String.Equals(ident, "false"))
+                        return new Token(spos, TokenType.Boolean, ident);
+                    else if (String.Equals(ident, "null"))
+                        return new Token(spos, TokenType.Null, ident);
+                    else
+                        return new Token(spos, TokenType.Identifier, sb.ToString());
+                }
+                // Quoted string literals:
+                else if (c == (int)'\'')
+                {
+                    int spos = lpos;
+                    var sb = new StringBuilder(10);
+
+                    do
+                    {
+                        c = Read();
+                        if (c == -1) return new Token(pos, TokenType.Error, "Unexpected end");
+                        else if (c == '\'') break;
+                        else if (c == '\\')
+                        {
+                            c = Read();
+                            if (c == -1) return new Token(pos, TokenType.Error, "Unexpected end");
+                            else if (c == '\'') sb.Append('\'');
+                            else if (c == '\\') sb.Append('\\');
+                            else if (c == 'n') sb.Append('\n');
+                            else if (c == 'r') sb.Append('\r');
+                            else if (c == 't') sb.Append('\t');
+                            else return new Token(pos, TokenType.Error, "Unknown backslash escape character '{0}'".F((char)c));
+                        }
+                        else sb.Append((char)c);
+                    } while (true);
+
+                    c = Read();
+                    return new Token(spos, TokenType.String, sb.ToString());
+                }
+                // Raw string literals:
+                else if (c == (int)'`')
+                {
+                    int spos = lpos;
+                    var sb = new StringBuilder(10);
+
+                    do
+                    {
+                        c = Read();
+                        if (c == -1) return new Token(pos, TokenType.Error, "Unexpected end");
+                        // TODO(jsd): Any escape sequences?
+                        else if (c == '`') break;
+                        else sb.Append((char)c);
+                    } while (true);
+
+                    c = Read();
+                    return new Token(spos, TokenType.String, sb.ToString());
                 }
                 // Numerics:
                 else if (Char.IsDigit((char)c) || c == '-')
@@ -179,59 +264,6 @@ namespace MiniLISP
 
                     return new Token(spos, type, sb.ToString());
                 }
-                // Identifiers:
-                else if (Char.IsLetter((char)c))
-                {
-                    // Parse an identifier ([A-Za-z][A-Za-z0-9\-]*):
-                    int spos = lpos;
-
-                    var sb = new StringBuilder(10);
-                    do
-                    {
-                        sb.Append((char)c);
-                        c = Read();
-                        if (c == -1) break;
-                    } while (Char.IsLetterOrDigit((char)c) || c == (int)'-');
-
-                    var ident = sb.ToString();
-                    if (String.Equals(ident, "true"))
-                        return new Token(spos, TokenType.Boolean, ident);
-                    else if (String.Equals(ident, "false"))
-                        return new Token(spos, TokenType.Boolean, ident);
-                    else if (String.Equals(ident, "null"))
-                        return new Token(spos, TokenType.Null, ident);
-                    else
-                        return new Token(spos, TokenType.Identifier, sb.ToString());
-                }
-                // Quoted strings:
-                // NOTE(jsd): We avoid double quotes since we will be writing this language in a C# const string literal.
-                else if (c == (int)'\'')
-                {
-                    int spos = lpos;
-                    var sb = new StringBuilder(10);
-
-                    do
-                    {
-                        c = Read();
-                        if (c == -1) return new Token(pos, TokenType.Error, "Unexpected end");
-                        else if (c == '\'') break;
-                        else if (c == '\\')
-                        {
-                            c = Read();
-                            if (c == -1) return new Token(pos, TokenType.Error, "Unexpected end");
-                            else if (c == '\'') sb.Append('\'');
-                            else if (c == '\\') sb.Append('\\');
-                            else if (c == 'n') sb.Append('\n');
-                            else if (c == 'r') sb.Append('\r');
-                            else if (c == 't') sb.Append('\t');
-                            else return new Token(pos, TokenType.Error, "Unknown backslash escape character '{0}'".F((char)c));
-                        }
-                        else sb.Append((char)c);
-                    } while (true);
-
-                    c = Read();
-                    return new Token(spos, TokenType.String, sb.ToString());
-                }
                 else
                 {
                     return new Token(lpos, TokenType.Error, "Unexpected character '{0}'".F((char)c));
@@ -261,7 +293,13 @@ namespace MiniLISP
         Invocation,
         List,
 
-        Identifier,
+        // global "identifier":
+        ScopedIdentifier,
+        // instance-specific ".memberName":
+        InstanceMemberIdentifier,
+        // static "namespace.class/member":
+        StaticMemberIdentifier,
+
         String,
         Integer,
         Boolean,
@@ -317,15 +355,79 @@ namespace MiniLISP
         }
     }
 
+    public abstract class IdentifierExpr : SExpr
+    {
+        protected IdentifierExpr(SExprKind kind, Token start, Token end)
+            : base(kind, start, end)
+        {
+        }
+    }
+
+    public sealed class ScopedIdentifierExpr : IdentifierExpr
+    {
+        public readonly Token Name;
+
+        public ScopedIdentifierExpr(Token ident)
+            : base(SExprKind.ScopedIdentifier, ident, ident)
+        {
+            Name = ident;
+        }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.Append(Name.Text);
+            return sb;
+        }
+    }
+
+    public sealed class InstanceMemberIdentifierExpr : IdentifierExpr
+    {
+        public readonly Token Name;
+
+        public InstanceMemberIdentifierExpr(Token dot, Token ident)
+            : base(SExprKind.InstanceMemberIdentifier, dot, ident)
+        {
+            Name = ident;
+        }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.Append('.');
+            sb.Append(Name.Text);
+            return sb;
+        }
+    }
+
+    public sealed class StaticMemberIdentifierExpr : IdentifierExpr
+    {
+        public readonly Token[] TypeName;
+        public readonly Token Name;
+
+        public StaticMemberIdentifierExpr(Token[] @typeName, Token ident)
+            : base(SExprKind.StaticMemberIdentifier, @typeName[0], ident)
+        {
+            TypeName = @typeName;
+            Name = ident;
+        }
+
+        public override StringBuilder AppendTo(StringBuilder sb)
+        {
+            sb.Append(String.Join(".", TypeName.Select(ns => ns.Text)));
+            sb.Append('/');
+            sb.Append(Name.Text);
+            return sb;
+        }
+    }
+
     public sealed class InvocationExpr : SExpr
     {
-        public readonly Token FuncName;
+        public readonly IdentifierExpr Identifier;
         public readonly SExpr[] Parameters;
 
-        public InvocationExpr(Token start, Token end, Token funcName, params SExpr[] parameters)
+        public InvocationExpr(Token start, Token end, IdentifierExpr identifier, params SExpr[] parameters)
             : base(SExprKind.Invocation, start, end)
         {
-            FuncName = funcName;
+            Identifier = identifier;
             Parameters = parameters;
         }
 
@@ -349,7 +451,8 @@ namespace MiniLISP
 
         public override StringBuilder AppendTo(StringBuilder sb)
         {
-            sb.AppendFormat("({0}", FuncName.Text);
+            sb.Append('(');
+            sb = Identifier.AppendTo(sb);
             for (int i = 0; i < Count; ++i)
             {
                 sb.Append(' ');
@@ -415,21 +518,6 @@ namespace MiniLISP
         {
             sb.Append('`');
             sb = SExpr.AppendTo(sb);
-            return sb;
-        }
-    }
-
-    public sealed class IdentifierExpr : SExpr
-    {
-        public IdentifierExpr(Token token)
-            : base(SExprKind.Identifier, token, token)
-        {
-            if (token.Type != TokenType.Identifier) throw new ArgumentException("token must be of type Identifier for an IdentifierExpr");
-        }
-
-        public override StringBuilder AppendTo(StringBuilder sb)
-        {
-            sb.Append(StartToken.Text);
             return sb;
         }
     }
@@ -641,6 +729,20 @@ namespace MiniLISP
             if (next.Left.Type != type) next = new ParserError(tok, "Unexpected token '{0}', expecting '{1}'".F(next.Left.Type, type));
         }
 
+        void ExpectOr(TokenType type1, TokenType type2)
+        {
+            Next();
+            if (next.IsRight) return;
+
+            Debug.Assert(next.IsLeft);
+            Debug.Assert(next.Left != null);
+
+            // Check the token type is the expected type:
+            if (next.Left.Type == type1) return;
+            else if (next.Left.Type == type2) return;
+            else next = new ParserError(tok, "Unexpected token '{0}', expecting '{1}' or '{2}'".F(next.Left.Type, type1, type2));
+        }
+
         public SExpr ParseExpr()
         {
             Next();
@@ -650,17 +752,76 @@ namespace MiniLISP
             {
                 var start = tok;
 
+                // NOTE(jsd): Built-in identifier expression parser here. Probably should extract this for general purpose usage.
+
                 // Expect function name:
-                Expect(TokenType.Identifier);
+                ExpectOr(TokenType.Identifier, TokenType.Dot);
                 if (next.IsRight) return next.Right;
-                var funcName = next.Left;
+
+                var identStart = tok;
+                IdentifierExpr ident;
+
+                // "memberName"
+                // ".memberName"
+                // "namespace.Type/memberName"
+
+                if (next.Left.Type == TokenType.Dot)
+                {
+                    // ".memberName":
+                    Expect(TokenType.Identifier);
+                    if (next.IsRight) return next.Right;
+
+                    ident = new InstanceMemberIdentifierExpr(identStart, next.Left);
+
+                    Next();
+                    if (next.IsRight) return next.Right;
+                }
+                else
+                {
+                    // "memberName"
+
+                    var typeNameParts = new List<Token>(5);
+                    typeNameParts.Add(next.Left);
+
+                    // "namespace.typeName" ?
+                    Next();
+                    while (!next.IsRight && next.Left.Type == TokenType.Dot)
+                    {
+                        Next();
+                        if (next.Left.Type == TokenType.Slash)
+                            break;
+                        if (next.Left.Type != TokenType.Identifier)
+                            break;
+
+                        typeNameParts.Add(next.Left);
+
+                        Next();
+                    };
+                    if (next.IsRight) return next.Right;
+
+                    // Determine what type of identifier:
+                    if (next.Left.Type == TokenType.Slash)
+                    {
+                        // "namespace.typeName/memberName"
+                        Expect(TokenType.Identifier);
+                        if (next.IsRight) return next.Right;
+
+                        ident = new StaticMemberIdentifierExpr(typeNameParts.ToArray(), next.Left);
+
+                        Next();
+                        if (next.IsRight) return next.Right;
+                    }
+                    else
+                    {
+                        if (typeNameParts.Count != 1)
+                            return new ParserError(tok, "Scoped identifier expression must have only one identifier part");
+
+                        ident = new ScopedIdentifierExpr(typeNameParts[0]);
+                    }
+                }
 
                 // Parse parameters:
                 List<SExpr> parameters;
-
-                Next();
-                if (next.IsRight) return next.Right;
-
                 if (tok.Type == TokenType.ParenClose)
                 {
                     // No parameters:
@@ -685,7 +846,7 @@ namespace MiniLISP
 
                 var end = tok;
 
-                return new InvocationExpr(start, end, funcName, parameters.ToArray());
+                return new InvocationExpr(start, end, ident, parameters.ToArray());
             }
             else if (tok.Type == TokenType.BracketOpen)
             {
@@ -735,7 +896,7 @@ namespace MiniLISP
             }
             else if (tok.Type == TokenType.Identifier)
             {
-                var expr = new IdentifierExpr(tok);
+                var expr = new ScopedIdentifierExpr(tok);
                 return expr;
             }
             else if (tok.Type == TokenType.Integer)

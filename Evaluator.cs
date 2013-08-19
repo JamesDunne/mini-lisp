@@ -68,7 +68,7 @@ namespace MiniLISP
         {
             sexpr.ThrowIfError();
 
-            if (sexpr.Kind == SExprKind.Identifier)
+            if (sexpr.Kind == SExprKind.ScopedIdentifier)
             {
                 return sexpr.StartToken.Text;
             }
@@ -137,17 +137,118 @@ namespace MiniLISP
 
         public object Invoke(InvocationExpr e)
         {
-            // Check the function name:
-            var name = e.FuncName.Text;
-            // TODO(jsd): Support CLR property/method invocation for objects!
+            if (e.Identifier.Kind == SExprKind.ScopedIdentifier)
+            {
+                // Check the function name:
+                var name = ((ScopedIdentifierExpr)e.Identifier).Name.Text;
+                // TODO(jsd): Support CLR property/method invocation for objects!
 
-            // Find the function in the `externs` dictionary:
-            ExternFunction func;
-            if (!externs.TryGetValue(name, out func))
-                throw new Exception("Undefined function '{0}'".F(name));
+                // Find the function in the `externs` dictionary:
+                ExternFunction func;
+                if (!externs.TryGetValue(name, out func))
+                    throw new Exception("Undefined function '{0}'".F(name));
 
-            // Execute it:
-            return func(this, e);
+                // Execute it:
+                return func(this, e);
+            }
+            else if (e.Identifier.Kind == SExprKind.StaticMemberIdentifier)
+            {
+                // Find the type by namespace/class:
+                var ident = (StaticMemberIdentifierExpr)e.Identifier;
+
+                var typeName = String.Join(".", ident.TypeName.Select(ns => ns.Text));
+                var memberName = ident.Name.Text;
+
+                var type = Type.GetType(typeName, false);
+                if (type == null)
+                    throw new Exception("Could not find type by name '{0}'".F(typeName));
+
+                // Member can be either a method or property:
+
+                // Find a method:
+                var mt = type.GetMethod(memberName);
+                if (mt != null)
+                {
+                    object[] parms;
+
+                    if (e.Count > 0)
+                        parms = Eval(e.Parameters);
+                    else
+                        parms = null;
+
+                    // TODO(jsd): handle invocation exception:
+                    return mt.Invoke(null, parms);
+                }
+
+                // Find a property:
+                var pr = type.GetProperty(memberName);
+                if (pr != null)
+                {
+                    // TODO(jsd): Turn this into a property reference expression so we can (set x) it.
+                    if (e.Count > 0)
+                    {
+                        var parms = Eval(e.Parameters);
+
+                        return pr.GetValue(null, parms);
+                    }
+                    else
+                    {
+                        return pr.GetValue(null);
+                    }
+                }
+
+                throw new Exception("Could not find method or property with name '{0}' on instance of type '{1}'".F(memberName, type.FullName));
+            }
+            else if (e.Identifier.Kind == SExprKind.InstanceMemberIdentifier)
+            {
+                // Find the type by namespace/class:
+                var ident = (InstanceMemberIdentifierExpr)e.Identifier;
+
+                var memberName = ident.Name.Text;
+
+                var instance = Eval(e[0]);
+                if (instance == null)
+                    throw new Exception("Cannot call a method on a null object instance");
+
+                var type = instance.GetType();
+
+                // Member can be either a method or property:
+
+                // Evaluate parameter expressions:
+                var parmExprs = e.Parameters.Skip(1).ToArray();
+                object[] parms;
+                Type[] parmTypes;
+                if (parmExprs.Length > 0)
+                {
+                    parms = Eval(parmExprs);
+                    parmTypes = parms.Select(p => p == null ? (Type)null : p.GetType()).ToArray();
+                }
+                else
+                {
+                    parms = null;
+                    parmTypes = Type.EmptyTypes;
+                }
+
+                // Find a method:
+                var mt = type.GetMethod(memberName, parmTypes);
+                if (mt != null)
+                {
+                    // TODO(jsd): handle invocation exception:
+                    return mt.Invoke(instance, parms);
+                }
+
+                // Find a property:
+                var pr = type.GetProperty(memberName);
+                if (pr != null)
+                {
+                    // TODO(jsd): Turn this into a property reference expression so we can (set x) it.
+                    return pr.GetValue(instance, parms);
+                }
+
+                throw new Exception("Could not find method or property with name '{0}' on instance of type '{1}'".F(memberName, type.FullName));
+            }
+
+            throw new Exception("Unknown or unsupported member identifier kind '{0}'".F(e.Identifier.Kind));
         }
     }
 
@@ -156,7 +257,7 @@ namespace MiniLISP
         public static object Eval(Evaluator v, InvocationExpr e)
         {
             if (e.Count != 1) throw new Exception("`eval` requires 1 parameter");
-            
+
             var quoteExpr = e[0] as QuoteExpr;
             if (quoteExpr == null) throw new Exception("`eval` parameter must be a quoted s-expression");
 
