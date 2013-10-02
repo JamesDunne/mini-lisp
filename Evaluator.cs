@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 namespace MiniLISP
 {
     public delegate object ExternFunction(Evaluator v, InvocationExpr e);
+    public delegate object ExternEvaluate(SExpr e, ExternEvaluate eval);
 
     public sealed class Evaluator : IEnumerable<KeyValuePair<string, ExternFunction>>
     {
@@ -121,9 +122,9 @@ namespace MiniLISP
             return externs.GetEnumerator();
         }
 
-        public T EvalExpecting<T>(SExpr sexpr)
+        public T EvalExpecting<T>(SExpr sexpr, ExternEvaluate customEval)
         {
-            object val = Eval(sexpr);
+            object val = customEval(sexpr, customEval);
 
             if (val.GetType() != typeof(T))
                 throw new Exception("Excepting a value of type {0} but got type {1}".F(typeof(T), val.GetType()));
@@ -131,15 +132,34 @@ namespace MiniLISP
             return (T)val;
         }
 
-        public object Eval(SExpr sexpr)
+        public T EvalExpecting<T>(SExpr sexpr)
         {
+            object val = Eval(sexpr, null);
+
+            if (val.GetType() != typeof(T))
+                throw new Exception("Excepting a value of type {0} but got type {1}".F(typeof(T), val.GetType()));
+
+            return (T)val;
+        }
+
+        public object Eval(SExpr sexpr, ExternEvaluate customEval)
+        {
+            if (customEval == null) customEval = Eval;
+
             sexpr.ThrowIfError();
 
             if (sexpr.Kind == SExprKind.ScopedIdentifier)
             {
                 // TODO(jsd): Search current `scope` for the identifier.
+                NamedStorage variable;
+                var name = sexpr.StartToken.Text;
+                if (!scope.TryGetVariable(name, out variable))
+                    throw new Exception("Cannot find variable named '{0}' in scope".F(name));
+
+                return variable.Value;
+
                 // Also support alternative behavior like this for pure data lists:
-                return sexpr.StartToken.Text;
+                //return sexpr.StartToken.Text;
             }
             else if (sexpr.Kind == SExprKind.Invocation)
             {
@@ -151,7 +171,7 @@ namespace MiniLISP
                 var items = new object[le.Count];
                 for (int i = 0; i < items.Length; ++i)
                 {
-                    items[i] = Eval(le[i]);
+                    items[i] = customEval(le[i], customEval);
                 }
                 return items;
             }
@@ -191,17 +211,28 @@ namespace MiniLISP
             throw new Exception("Unknown expression kind: '{0}'".F(sexpr.Kind));
         }
 
-        public object[] Eval(SExpr[] sexprs)
+        public object Eval(SExpr sexpr)
+        {
+            return Eval(sexpr, Eval);
+        }
+
+        public object[] Eval(SExpr[] sexprs, ExternEvaluate customEval)
         {
             if (sexprs == null) return null;
             if (sexprs.Length == 0) return new object[0];
+            if (customEval == null) customEval = Eval;
 
             var results = new object[sexprs.Length];
             for (int i = 0; i < sexprs.Length; ++i)
             {
-                results[i] = Eval(sexprs[i]);
+                results[i] = customEval(sexprs[i], customEval);
             }
             return results;
+        }
+
+        public object[] Eval(SExpr[] sexprs)
+        {
+            return Eval(sexprs, Eval);
         }
 
         public object Invoke(InvocationExpr e)
