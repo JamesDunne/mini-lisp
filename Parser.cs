@@ -156,10 +156,10 @@ namespace MiniLISP
                     c = Read();
                     return tok;
                 }
-                // Identifiers:
+                // Keywords or unquoted strings:
                 else if (Char.IsLetter((char)c) || c == '_')
                 {
-                    // Parse an identifier ([A-Za-z][A-Za-z0-9\-_]*):
+                    // Parse an unquoted string ([A-Za-z_][A-Za-z0-9\-_]*):
                     int spos = lpos;
 
                     var sb = new StringBuilder(10);

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace MiniLISP
 {
     public delegate object ExternFunction(Evaluator v, InvocationExpr e);
-    public delegate object ExternEvaluate(SExpr e, ExternEvaluate eval);
+    public delegate object ExternEvaluate(Evaluator v, SExpr e, ExternEvaluate eval);
 
     public sealed class Evaluator : IEnumerable<KeyValuePair<string, ExternFunction>>
     {
@@ -124,7 +124,7 @@ namespace MiniLISP
 
         public T EvalExpecting<T>(SExpr sexpr, ExternEvaluate customEval)
         {
-            object val = customEval(sexpr, customEval);
+            object val = customEval(this, sexpr, customEval);
 
             if (val.GetType() != typeof(T))
                 throw new Exception("Excepting a value of type {0} but got type {1}".F(typeof(T), val.GetType()));
@@ -142,24 +142,36 @@ namespace MiniLISP
             return (T)val;
         }
 
+        public NamedStorage TryResolve(ScopedIdentifierExpr sexpr)
+        {
+            NamedStorage variable;
+            var name = sexpr.StartToken.Text;
+            if (!scope.TryGetVariable(name, out variable))
+                return null;
+            return variable;
+        }
+
+        object defaultEval(Evaluator a, SExpr sexpr, ExternEvaluate customEval)
+        {
+            return Eval(sexpr, customEval);
+        }
+
         public object Eval(SExpr sexpr, ExternEvaluate customEval)
         {
-            if (customEval == null) customEval = Eval;
+            if (customEval == null)
+                customEval = defaultEval;
 
             sexpr.ThrowIfError();
 
             if (sexpr.Kind == SExprKind.ScopedIdentifier)
             {
-                // TODO(jsd): Search current `scope` for the identifier.
-                NamedStorage variable;
-                var name = sexpr.StartToken.Text;
-                if (!scope.TryGetVariable(name, out variable))
-                    throw new Exception("Cannot find variable named '{0}' in scope".F(name));
+                // Try to resolve the identifier:
+                var identExpr = (ScopedIdentifierExpr)sexpr;
+                NamedStorage variable = TryResolve(identExpr);
+                if (variable == null)
+                    throw new Exception("Cannot find variable named '{0}' in scope".F(identExpr.Name));
 
                 return variable.Value;
-
-                // Also support alternative behavior like this for pure data lists:
-                //return sexpr.StartToken.Text;
             }
             else if (sexpr.Kind == SExprKind.Invocation)
             {
@@ -171,7 +183,7 @@ namespace MiniLISP
                 var items = new object[le.Count];
                 for (int i = 0; i < items.Length; ++i)
                 {
-                    items[i] = customEval(le[i], customEval);
+                    items[i] = customEval(this, le[i], customEval);
                 }
                 return items;
             }
@@ -213,26 +225,26 @@ namespace MiniLISP
 
         public object Eval(SExpr sexpr)
         {
-            return Eval(sexpr, Eval);
+            return Eval(sexpr, defaultEval);
         }
 
         public object[] Eval(SExpr[] sexprs, ExternEvaluate customEval)
         {
             if (sexprs == null) return null;
             if (sexprs.Length == 0) return new object[0];
-            if (customEval == null) customEval = Eval;
+            if (customEval == null) customEval = defaultEval;
 
             var results = new object[sexprs.Length];
             for (int i = 0; i < sexprs.Length; ++i)
             {
-                results[i] = customEval(sexprs[i], customEval);
+                results[i] = customEval(this, sexprs[i], customEval);
             }
             return results;
         }
 
         public object[] Eval(SExpr[] sexprs)
         {
-            return Eval(sexprs, Eval);
+            return Eval(sexprs, defaultEval);
         }
 
         public object Invoke(InvocationExpr e)
